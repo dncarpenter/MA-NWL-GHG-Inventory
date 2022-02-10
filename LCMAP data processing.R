@@ -1,7 +1,17 @@
-setwd("C:/Users/Dunbar.Carpenter/OneDrive - Commonwealth of Massachusetts/")
+## Load packages
 library(terra)
 library(tidyverse)
+library(tigris)
 library(sf)
+
+## Set local data directories for raw and processed data
+env.r <- "C:/Users/Dunbar.Carpenter/OneDrive - Commonwealth of Massachusetts/Data & Tools/LULC/LCMAP/Data/"
+env.p <- "C:/Users/Dunbar.Carpenter/OneDrive - Commonwealth of Massachusetts/Data & Tools/LULC/LCMAP/Data/"
+aws.r <- "G:/LCMAP_Data/"
+aws.p <- "G:/LCMAP_Data/"
+
+dat.raw.dir = 
+dat.prc.dir = 
 
 #### LCMAP
 ## Load 2016 primary & secondary land cover data
@@ -10,9 +20,15 @@ lcmap2 <- rast('Data & Tools/LULC/LCMAP/Data/LCMAP_CU_2016_V12_LCSEC.tiff')
 lcmap <- c(lcmap1, lcmap2)
 
 ## Mass boundary: Load, re-project, make 1km buffer, convert to spat vector
-ma.outline <- st_read(dsn = "Data & Tools/General Spatial Data/MA/MassGIS_Vector_GISDATA_9July2021.gdb",
+ma.outline <- states(cb = T, year = 2020) %>% 
+                filter_state("Massachusetts") %>%
+                st_geometry()
+plot(ma.outline)
+ma.outline2 <- st_read(dsn = "Data & Tools/General Spatial Data/MA/MassGIS_Vector_GISDATA_9July2021.gdb",
                       layer = 'OUTLINE_POLY') %>%
-  st_geometry()
+                      st_geometry()
+plot(ma.outline)
+plot(ma.outline2, add=T)
 ma.prj <- st_transform(ma.outline, crs = crs(lcmap))
 ma <- vect(ma.prj)
 ma.bfr <- st_buffer(ma.prj, dist = 500) %>%
