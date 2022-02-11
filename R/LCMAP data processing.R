@@ -12,6 +12,8 @@ aws.p <- "G:/LCMAP_Data/"
 
 dat.raw.dir = 
 dat.prc.dir = 
+  tigris_cache_dir('PATH TO MY NEW CACHE DIRECTORY')
+Sys.getenv('TIGRIS_CACHE_DIR')
 
 #### LCMAP
 ## Load 2016 primary & secondary land cover data
@@ -20,7 +22,7 @@ lcmap2 <- rast('Data & Tools/LULC/LCMAP/Data/LCMAP_CU_2016_V12_LCSEC.tiff')
 lcmap <- c(lcmap1, lcmap2)
 
 ## Mass boundary: Load, re-project, make 1km buffer, convert to spat vector
-ma.outline <- states(cb = T, year = 2020) %>% 
+ma.outline <- states(cb = T, resolution='100k', year = 2020) %>% 
                 filter_state("Massachusetts") %>%
                 st_geometry()
 plot(ma.outline)
