@@ -1,122 +1,118 @@
 ## Load packages
 library(terra)
 library(tidyverse)
-library(tigris)
+# library(tigris)
 library(sf)
 
-## Set local data directories for raw and processed data
+## Set local data directories for raw LCMAP data and processed/output (dif. from vector data which doesn't take up much space)
 env.r <- "C:/Users/Dunbar.Carpenter/OneDrive - Commonwealth of Massachusetts/Data & Tools/LULC/LCMAP/Data/"
-env.p <- "C:/Users/Dunbar.Carpenter/OneDrive - Commonwealth of Massachusetts/Data & Tools/LULC/LCMAP/Data/"
-aws.r <- "G:/LCMAP_Data/"
+env.p <- "C:/Users/Dunbar.Carpenter/OneDrive - Commonwealth of Massachusetts/Analyses/Mass NWL GHG Inventory/data/"
+aws.r <- "G:/LCMAP_Data/raw/"
 aws.p <- "G:/LCMAP_Data/"
 
-dat.raw.dir = 
-dat.prc.dir = 
-  tigris_cache_dir('PATH TO MY NEW CACHE DIRECTORY')
-Sys.getenv('TIGRIS_CACHE_DIR')
+dat.raw.dir = env.r
+dat.prc.dir = env.p
+
 
 #### LCMAP
 ## Load 2016 primary & secondary land cover data
-lcmap1 <- rast('Data & Tools/LULC/LCMAP/Data/LCMAP_CU_2016_V12_LCPRI.tiff')
-lcmap2 <- rast('Data & Tools/LULC/LCMAP/Data/LCMAP_CU_2016_V12_LCSEC.tiff')
+lcmap1 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2016_V12_LCPRI.tiff', sep=''))
+lcmap2 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2016_V12_LCSEC.tiff', sep=''))
 lcmap <- c(lcmap1, lcmap2)
 
-## Mass boundary: Load, re-project, make 1km buffer, convert to spat vector
-ma.outline <- states(cb = T, resolution='100k', year = 2020) %>% 
-                filter_state("Massachusetts") %>%
-                st_geometry()
-plot(ma.outline)
-ma.outline2 <- st_read(dsn = "Data & Tools/General Spatial Data/MA/MassGIS_Vector_GISDATA_9July2021.gdb",
-                      layer = 'OUTLINE_POLY') %>%
-                      st_geometry()
-plot(ma.outline)
-plot(ma.outline2, add=T)
-ma.prj <- st_transform(ma.outline, crs = crs(lcmap))
-ma <- vect(ma.prj)
-ma.bfr <- st_buffer(ma.prj, dist = 500) %>%
-  st_union() %>%
-  vect()
-
-## Crop to MA
-ma.lc <- mask(crop(lcmap, ma.bfr), mask = ma.bfr)
 ## Set levels for categorical rasters
-lcmap1.lgd <- data.frame(id=1:8, cover1=c('Developed','Cropland','Grass/Shrub','Tree Cover',
+lcmap.lgd <- data.frame(id=1:8, cover=c('Developed','Cropland','Grass/Shrub','Tree Cover',
                                           'Water','Wetland','Ice/Snow','Barren'), value=1:8)
-lcmap2.lgd <- lcmap1.lgd %>%
-  rename('cover2'='cover1')
-levels(ma.lc) <- list(lcmap1.lgd, lcmap2.lgd)
-## plot
-# plot(ma.lc$cover1, legend='topright')
-# plot(ma, add=T)
+levels(aoi.lc) <- list(lcmap.lgd, lcmap.lgd)
+names(aoi.lc) <- c('cover1','cover2')
 
-## Make frequency table
-malc.frq <-  freq(mask(ma.lc$cover1, ma))
-malc.frqtbl <- tibble(ClassScheme=rep('Original',nrow(malc.frq)),
-                      Class=malc.frq$value,
-                      Area.ha=round(malc.frq[,'count']*res(ma.lc)[1]^2/100^2),
-                      Area.ac=round(malc.frq[,'count']*res(ma.lc)[1]^2/4046.86),
-                      Area.sqkm=round(malc.frq[,'count']*res(ma.lc)[1]^2/1000^2),
-                      Area.sqmi=round(malc.frq[,'count']*res(ma.lc)[1]^2/2590000),
-                      Area.pct=round(100*malc.frq[,'count']/sum(malc.frq[,'count']),2)) %>%
+
+## AOI boundary: Load geometry, re-project, convert to spat vector, make 500m buffer
+# ma.bdry <- states(cb = T, year = 2020) %>% 
+#                   filter_state("Massachusetts") %>%
+aoi.bdry <- st_read(dsn = "input data/OUTLINE25K_POLY.shp") %>%
+                      st_geometry() %>%
+                      st_transform(crs = crs(lcmap)) 
+aoi <- vect(aoi.bdry) # make spatvector v. of AOI bdry
+aoi.bfr <- st_buffer(aoi.bdry, dist = 500) %>% # add buffer & make spatvector from AOI bdry
+                    st_union() %>%
+                    vect()
+
+## Crop LCMAP data to buffered AOI boundary
+aoi.lc <- mask(crop(lcmap, aoi.bfr), mask = aoi.bfr)
+
+## plot
+plot(aoi.lc$cover1, legend='topright')
+plot(aoi, add=T)
+
+## Make land coverfrequency table
+lc.frq <-  freq(mask(aoi.lc$cover1, ma)) # 
+lc.frqtbl <- tibble(ClassScheme=rep('Original',nrow(lc.frq)),
+                      Class=lc.frq$value,
+                      Area.ha=round(lc.frq[,'count']*res(aoi.lc)[1]^2/100^2),
+                      Area.ac=round(lc.frq[,'count']*res(aoi.lc)[1]^2/4046.86),
+                      Area.sqkm=round(lc.frq[,'count']*res(aoi.lc)[1]^2/1000^2),
+                      Area.sqmi=round(lc.frq[,'count']*res(aoi.lc)[1]^2/2590000),
+                      Area.pct=round(100*lc.frq[,'count']/sum(lc.frq[,'count']),2)) %>%
   arrange(desc(Area.ha))
-# malc.frqtbl
+# lc.frqtbl
 
 #### I. Forested Wetland Modification
 ## Make LCPRI wetland, LCSEC forest, and combo rasters; plot
-malc1.wl <- classify(ma.lc$cover1, rcl=cbind(6,6), othersNA=T)
-malc2.tr <- classify(ma.lc$cover2, rcl=cbind(4,4), othersNA=T)
-malc.forwet <- malc1.wl*malc2.tr
+malc1.wl <- classify(aoi.lc$cover1, rcl=cbind(6,6), othersNA=T)
+malc2.tr <- classify(aoi.lc$cover2, rcl=cbind(4,4), othersNA=T)
+lc.forwet <- malc1.wl*malc2.tr
 
 # plot(malc1.wl, col='blue1')
 # plot(malc2.tr, add=T, col='green1')
-# plot(malc.forwet, add=T, col='red3')
+# plot(lc.forwet, add=T, col='red3')
 
 ## Add modified LC layer to raster stack
-malc.forwet <- subst(malc.forwet, from=NA, to=0)
-ma.lc$cover3 <- ma.lc$cover1 + malc.forwet
-ma.lc$cover3 <- subst(ma.lc$cover3, from=30, to=4)
-ma.lc3.lgd <- lcmap1.lgd %>%
+lc.forwet <- subst(lc.forwet, from=NA, to=0)
+aoi.lc$cover3 <- aoi.lc$cover1 + lc.forwet
+aoi.lc$cover3 <- subst(aoi.lc$cover3, from=30, to=4)
+aoi.lc3.lgd <- lcmap1.lgd %>%
   rename('cover3'='cover1')
-levels(ma.lc$cover3) <- ma.lc3.lgd ## apply legend from original LC data
-coltab(ma.lc$cover3) <- coltab(ma.lc$cover1) ## apply color table from original LC data
-# plot(ma.lc)
-# plot(ma.lc$cover3, legend='topright')
-
+levels(aoi.lc$cover3) <- aoi.lc3.lgd ## apply legend from original LC data
+coltab(aoi.lc$cover3) <- coltab(aoi.lc$cover1) ## apply color table from original LC data
+# plot(aoi.lc)
+# plot(aoi.lc$cover3, legend='topright')
+# LMCAP MA landcover 2016 wetland-forest adjusted.tif
 
 ## Append frequency table for new LC layer to original for comparison
-malc3.frq <- freq(mask(ma.lc$cover3, ma))
-malc.frqtbl <- tibble(ClassScheme=rep('ForWet mod',nrow(malc3.frq)),
+malc3.frq <- freq(mask(aoi.lc$cover3, ma))
+lc.frqtbl <- tibble(ClassScheme=rep('ForWet mod',nrow(malc3.frq)),
                       Class=malc3.frq$value,
-                      Area.ha=round(malc3.frq[,'count']*res(ma.lc)[1]^2/100^2),
-                      Area.ac=round(malc3.frq[,'count']*res(ma.lc)[1]^2/4046.86),
-                      Area.sqkm=round(malc3.frq[,'count']*res(ma.lc)[1]^2/1000^2),
-                      Area.sqmi=round(malc3.frq[,'count']*res(ma.lc)[1]^2/2590000),
+                      Area.ha=round(malc3.frq[,'count']*res(aoi.lc)[1]^2/100^2),
+                      Area.ac=round(malc3.frq[,'count']*res(aoi.lc)[1]^2/4046.86),
+                      Area.sqkm=round(malc3.frq[,'count']*res(aoi.lc)[1]^2/1000^2),
+                      Area.sqmi=round(malc3.frq[,'count']*res(aoi.lc)[1]^2/2590000),
                       Area.pct=round(100*malc3.frq[,'count']/sum(malc3.frq[,'count']),2)) %>%
   arrange(desc(Area.ha)) %>%
-  bind_rows(malc.frqtbl) #%>%
+  bind_rows(lc.frqtbl) #%>%
 # write_csv('Analyses/Mass LULC/data/intermediate/LCMAP2016 MA LC scheme comparison.csv')
-# malc.frqtbl
+# lc.frqtbl
 
 
 ############ II. Settlement Land
 #### small set extent & crop MA LC data
-plot(ma.lc$cover3, legend = 'topright')
+plot(aoi.lc$cover3, legend = 'topright')
 # sa.e <- draw()  ## manually select sample area
-# e <- ext(ma.lc)
+# e <- ext(aoi.lc)
 e <- ext(2014000, 2067000, 2354000, 2397000) ## larger sample area ext (~10% of state)
 # e <- ext(1977495, 1981335, 2394585, 2397105) ## smaller sample area ext (~0.04% of state)
 
-lc <- crop(ma.lc$cover3, ext(e)) ## crop to relevant extent
+lc <- crop(aoi.lc$cover3, ext(e)) ## crop to relevant extent
 
-# (ma.lc.area <- sum(freq(ma.lc$cover3)$count)*30^2/1000^2) ## km^2 area of LC data for all MA
+# (aoi.lc.area <- sum(freq(aoi.lc$cover3)$count)*30^2/1000^2) ## km^2 area of LC data for all MA
 # (lc.area <- sum(freq(lc)$count)*30^2/1000^2)              ## km^2 area of LC data  for extent e
-# 100*lc.area/ma.lc.area                                    ## sample area as % of MA
+# 100*lc.area/aoi.lc.area                                    ## sample area as % of MA
 plot(lc)
 
 
 ## A. LCPRI = Developed
-ma.lc$cover4 <- ma.lc$cover3
-levels(ma.lc$cover4) <- data.frame(id=1:8, class=c('Settlement','Cropland','Grass/Shrub','Tree Cover',
+aoi.lc$cover4 <- aoi.lc$cover3
+levels(aoi.lc$cover4) <- data.frame(id=1:8, class=c('Settlement','Cropland','Grass/Shrub','Tree Cover',
                                                    'Water','Wetland','Ice/Snow','Barren'), value=1:8)
 
 ##	B. NWL Patches in Settlement Land
@@ -269,13 +265,13 @@ plot(lc, main='Land Cover')
 stl <- classify(lc, cbind(1:8, c(NA, rep(1,7))))
 stl2 <-
   malc.forwet <- subst(malc.forwet, from=NA, to=0)
-ma.lc$cover3 <- ma.lc$cover1 + malc.forwet
-ma.lc$cover3 <- subst(ma.lc$cover3, from=30, to=4)
-ma.lc3.lgd <- lcmap1.lgd %>%
+aoi.lc$cover3 <- aoi.lc$cover1 + malc.forwet
+aoi.lc$cover3 <- subst(aoi.lc$cover3, from=30, to=4)
+aoi.lc3.lgd <- lcmap1.lgd %>%
   rename('cover3'='cover1')
-levels(ma.lc$cover3) <- ma.lc3.lgd ## apply legend from original LC data
-coltab(ma.lc$cover3) <- coltab(ma.lc$cover1) ## apply color table from original LC data
-# plot(ma.lc)
+levels(aoi.lc$cover3) <- aoi.lc3.lgd ## apply legend from original LC data
+coltab(aoi.lc$cover3) <- coltab(aoi.lc$cover1) ## apply color table from original LC data
+# plot(aoi.lc)
 
 ########
 ##	D. All land within 30m (1 pixel) of LCPRI Developed
