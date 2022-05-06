@@ -18,13 +18,16 @@ dat.prc.dir = env.p
 ## Load 2016 primary & secondary land cover data
 lcmap1 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2016_V12_LCPRI.tiff', sep=''))
 lcmap2 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2016_V12_LCSEC.tiff', sep=''))
+lcmap1 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2020_V12_LCPRI.tiff', sep=''))
+lcmap2 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2020_V12_LCSEC.tiff', sep=''))
+
 lcmap <- c(lcmap1, lcmap2)
 
 ## Set levels for categorical rasters
 lcmap.lgd <- data.frame(id=1:8, cover=c('Developed','Cropland','Grass/Shrub','Tree Cover',
                                           'Water','Wetland','Ice/Snow','Barren'), value=1:8)
-levels(aoi.lc) <- list(lcmap.lgd, lcmap.lgd)
-names(aoi.lc) <- c('cover1','cover2')
+levels(lcmap) <- list(lcmap.lgd, lcmap.lgd)
+names(lcmap) <- c('cover1','cover2')
 
 
 ## AOI boundary: Load geometry, re-project, convert to spat vector, make 500m buffer
@@ -45,8 +48,8 @@ aoi.lc <- mask(crop(lcmap, aoi.bfr), mask = aoi.bfr)
 plot(aoi.lc$cover1, legend='topright')
 plot(aoi, add=T)
 
-## Make land coverfrequency table
-lc.frq <-  freq(mask(aoi.lc$cover1, ma)) # 
+## Make land cover frequency table
+lc.frq <-  freq(aoi.lc$cover1) # 
 lc.frqtbl <- tibble(ClassScheme=rep('Original',nrow(lc.frq)),
                       Class=lc.frq$value,
                       Area.ha=round(lc.frq[,'count']*res(aoi.lc)[1]^2/100^2),
@@ -71,12 +74,13 @@ lc.forwet <- malc1.wl*malc2.tr
 lc.forwet <- subst(lc.forwet, from=NA, to=0)
 aoi.lc$cover3 <- aoi.lc$cover1 + lc.forwet
 aoi.lc$cover3 <- subst(aoi.lc$cover3, from=30, to=4)
-aoi.lc3.lgd <- lcmap1.lgd %>%
-  rename('cover3'='cover1')
+aoi.lc3.lgd <- lcmap.lgd %>%
+  rename('cover3'='cover')
 levels(aoi.lc$cover3) <- aoi.lc3.lgd ## apply legend from original LC data
 coltab(aoi.lc$cover3) <- coltab(aoi.lc$cover1) ## apply color table from original LC data
 # plot(aoi.lc)
 # plot(aoi.lc$cover3, legend='topright')
+writeRaster(aoi.lc, 'C:/Users/Dunbar.Carpenter/OneDrive - Commonwealth of Massachusetts/Analyses/Mass NWL GHG Inventory Processing/data/intermediate/LMCAP MA landcover 2020 wetland-forest adjusted.tif', overwrite=T)
 # LMCAP MA landcover 2016 wetland-forest adjusted.tif
 
 ## Append frequency table for new LC layer to original for comparison
