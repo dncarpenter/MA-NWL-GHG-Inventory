@@ -16,8 +16,8 @@ dat.prc.dir = env.p
 
 #### LCMAP
 ## Load 2016 primary & secondary land cover data
-lcmap1 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2016_V12_LCPRI.tiff', sep=''))
-lcmap2 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2016_V12_LCSEC.tiff', sep=''))
+# lcmap1 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2016_V12_LCPRI.tiff', sep=''))
+# lcmap2 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2016_V12_LCSEC.tiff', sep=''))
 lcmap1 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2020_V12_LCPRI.tiff', sep=''))
 lcmap2 <- rast(paste(dat.raw.dir, 'LCMAP_CU_2020_V12_LCSEC.tiff', sep=''))
 
@@ -45,8 +45,8 @@ aoi.bfr <- st_buffer(aoi.bdry, dist = 500) %>% # add buffer & make spatvector fr
 aoi.lc <- mask(crop(lcmap, aoi.bfr), mask = aoi.bfr)
 
 ## plot
-plot(aoi.lc$cover1, legend='topright')
-plot(aoi, add=T)
+# plot(aoi.lc$cover1, legend='topright')
+# plot(aoi, add=T)
 
 ## Make land cover frequency table
 lc.frq <-  freq(aoi.lc$cover1) # 
@@ -80,11 +80,11 @@ levels(aoi.lc$cover3) <- aoi.lc3.lgd ## apply legend from original LC data
 coltab(aoi.lc$cover3) <- coltab(aoi.lc$cover1) ## apply color table from original LC data
 # plot(aoi.lc)
 # plot(aoi.lc$cover3, legend='topright')
-writeRaster(aoi.lc, 'C:/Users/Dunbar.Carpenter/OneDrive - Commonwealth of Massachusetts/Analyses/Mass NWL GHG Inventory Processing/data/intermediate/LMCAP MA landcover 2020 wetland-forest adjusted.tif', overwrite=T)
+# writeRaster(aoi.lc, 'C:/Users/Dunbar.Carpenter/OneDrive - Commonwealth of Massachusetts/Analyses/Mass NWL GHG Inventory Processing/data/intermediate/LMCAP MA landcover 2020 wetland-forest adjusted.tif', overwrite=T)
 # LMCAP MA landcover 2016 wetland-forest adjusted.tif
 
 ## Append frequency table for new LC layer to original for comparison
-malc3.frq <- freq(mask(aoi.lc$cover3, ma))
+malc3.frq <- freq(aoi.lc$cover3)
 lc.frqtbl <- tibble(ClassScheme=rep('ForWet mod',nrow(malc3.frq)),
                       Class=malc3.frq$value,
                       Area.ha=round(malc3.frq[,'count']*res(aoi.lc)[1]^2/100^2),
@@ -93,8 +93,8 @@ lc.frqtbl <- tibble(ClassScheme=rep('ForWet mod',nrow(malc3.frq)),
                       Area.sqmi=round(malc3.frq[,'count']*res(aoi.lc)[1]^2/2590000),
                       Area.pct=round(100*malc3.frq[,'count']/sum(malc3.frq[,'count']),2)) %>%
   arrange(desc(Area.ha)) %>%
-  bind_rows(lc.frqtbl) #%>%
-# write_csv('Analyses/Mass LULC/data/intermediate/LCMAP2016 MA LC scheme comparison.csv')
+  bind_rows(lc.frqtbl)
+write_csv(lc.frqtbl, 'C:/Users/Dunbar.Carpenter/OneDrive - Commonwealth of Massachusetts/Analyses/Mass NWL GHG Inventory Processing/data/intermediate/LCMAP2016 MA LC scheme comparison.csv', )
 # lc.frqtbl
 
 
